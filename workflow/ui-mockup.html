@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Clickable UI mockup of a proposed Workflow view for the Fontra font editor — pipeline step stack, live per-step font preview, YAML round-trip. Static mockup, no engine behind it.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'>F</text></svg>">
+<title>Fontra Workflow view — clickable mockup</title>
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --panel: #ffffff;
+    --border: #e2e2de;
+    --text: #1a1a1a;
+    --muted: #8a8a85;
+    --accent: #2563eb;
+    --accent-soft: #eaf0fe;
+    --warn: #b45309;
+    --warn-soft: #fef3e2;
+    --ok: #15803d;
+    --input-chip: #0ea5a4;
+    --filter-chip: #6366f1;
+    --output-chip: #d97706;
+    --fork-chip: #64748b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.45 -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+
+  /* ---------- top bar ---------- */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header .logo {
+    width: 22px; height: 22px; border-radius: 5px; background: #111;
+    color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px;
+  }
+  header .title { font-weight: 600; }
+  header .title small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  header .spacer { flex: 1; }
+  .btn {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 7px; padding: 5px 12px; cursor: pointer; font: inherit;
+  }
+  .btn:hover { border-color: #c9c9c4; background: #fafaf8; }
+  .btn.primary { background: #111; color: #fff; border-color: #111; }
+  .btn.primary:hover { background: #2b2b2b; }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- main 3-pane layout ---------- */
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* palette */
+  #palette {
+    width: 215px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #palette .search { padding: 10px; border-bottom: 1px solid var(--border); }
+  #palette input {
+    width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; font: inherit;
+  }
+  #paletteList { overflow: auto; flex: 1; padding: 6px 0 14px; }
+  .pcat { padding: 10px 12px 4px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .pitem { padding: 5px 12px; cursor: grab; display: flex; align-items: center; gap: 7px; }
+  .pitem:hover { background: var(--accent-soft); }
+  .pitem .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .pitem code { font-family: var(--mono); font-size: 11.5px; }
+  .pitem .from { margin-left: auto; font-size: 9.5px; color: var(--muted); border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; }
+
+  /* pipeline */
+  #pipeline { flex: 1; overflow: auto; padding: 22px 26px 80px; }
+  #pipeline h3 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .stack { max-width: 480px; }
+  .step {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 12px; cursor: pointer; position: relative; display: flex; align-items: center; gap: 9px;
+  }
+  .step:hover { border-color: #c9c9c4; }
+  .step.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .step .chip {
+    font-size: 10px; font-weight: 600; color: #fff; padding: 2px 7px; border-radius: 5px; flex: none;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .step .body { min-width: 0; }
+  .step .aname { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+  .step .asum { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .step .badge {
+    margin-left: auto; flex: none; font-size: 11px; border-radius: 99px; padding: 1px 8px;
+  }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.ok { color: var(--ok); }
+  .indent1 { margin-left: 38px; }
+  .forklane { border-left: 2px solid #cfd4dc; margin-left: 19px; padding-left: 0; }
+
+  /* connector + preview pin */
+  .connector { display: flex; align-items: center; height: 26px; margin-left: 19px; gap: 8px; }
+  .connector.indent1 { margin-left: 57px; }
+  .connector .line { width: 2px; height: 100%; background: #cfd4dc; }
+  .pin {
+    width: 15px; height: 15px; border-radius: 50%; border: 2px solid #b9bec7; background: var(--panel);
+    cursor: pointer; flex: none; margin-left: -8.5px;
+  }
+  .pin:hover { border-color: var(--accent); }
+  .pin.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .pinlabel { font-size: 10.5px; color: var(--muted); opacity: 0; transition: opacity .15s; }
+  .connector:hover .pinlabel, .pin.active + .pinlabel { opacity: 1; }
+  .addbtn {
+    margin-left: auto; margin-right: 6px; width: 18px; height: 18px; border-radius: 50%;
+    border: 1px dashed #b9bec7; color: var(--muted); background: none; cursor: pointer;
+    font-size: 12px; line-height: 1; display: grid; place-items: center; opacity: 0;
+  }
+  .connector:hover .addbtn { opacity: 1; }
+
+  /* right column */
+  #right {
+    width: 330px; border-left: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #inspector { padding: 14px; border-bottom: 1px solid var(--border); overflow: auto; max-height: 46%; }
+  #inspector h3, #preview h3 {
+    margin: 0 0 10px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  }
+  #inspector .ititle { font-family: var(--mono); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  #inspector .idesc { color: var(--muted); font-size: 11.5px; margin-bottom: 12px; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; color: #555; margin-bottom: 3px; font-family: var(--mono); }
+  .field input[type=text], .field select {
+    width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit;
+  }
+  .field .range { display: flex; gap: 10px; align-items: center; }
+  .field input[type=range] { flex: 1; accent-color: var(--accent); }
+  .field .rv { font-family: var(--mono); font-size: 12px; min-width: 34px; text-align: right; }
+  .field .check { display: flex; gap: 7px; align-items: center; font-size: 12px; }
+  .tagrow { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag { background: #eef0f3; border-radius: 5px; padding: 2px 8px; font-size: 11.5px; }
+  .tag.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .warnbox { background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; color: var(--warn); margin-top: 6px; }
+  .warnbox code { font-family: var(--mono); }
+
+  /* preview */
+  #preview { flex: 1; padding: 14px; overflow: auto; display: flex; flex-direction: column; }
+  #pvMeta { display: flex; gap: 14px; margin-bottom: 10px; }
+  #pvMeta .m { text-align: center; }
+  #pvMeta .m b { display: block; font-size: 16px; }
+  #pvMeta .m span { font-size: 10.5px; color: var(--muted); }
+  #pvNote { font-size: 11.5px; color: var(--muted); margin-bottom: 10px; }
+  #sampleLine {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    font-family: Georgia, "Times New Roman", serif; font-size: 26px; white-space: nowrap; overflow: hidden;
+  }
+  #grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  #grid .cell {
+    aspect-ratio: 1; border: 1px solid var(--border); border-radius: 5px; display: grid; place-items: center;
+    font-family: Georgia, serif; font-size: 17px; background: #fff; position: relative;
+  }
+  #grid .cell .st { position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; }
+  .diffNew { outline: 2px solid #86efac; }
+  #pvToggleRow { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  #pvToggleRow .pill { cursor: default; }
+
+  /* run bar */
+  footer {
+    border-top: 1px solid var(--border); background: var(--panel); padding: 8px 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  footer .outdir { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }
+  .prog { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .pbar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .pbar .track { flex: 1; height: 5px; border-radius: 99px; background: #ececea; overflow: hidden; }
+  .pbar .fill { height: 100%; width: 0%; background: var(--accent); transition: width .12s; }
+  .pbar .fname { font-family: var(--mono); min-width: 130px; }
+  #log {
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted); max-width: 330px;
+    max-height: 44px; overflow: auto; white-space: nowrap;
+  }
+  #log .err { color: var(--warn); }
+
+  /* yaml drawer */
+  #yamlDrawer {
+    position: fixed; top: 0; right: -460px; width: 440px; height: 100%; background: #16181d; color: #d6dbe3;
+    transition: right .2s ease; z-index: 50; display: flex; flex-direction: column;
+    box-shadow: -8px 0 24px rgba(0,0,0,.18);
+  }
+  #yamlDrawer.open { right: 0; }
+  #yamlDrawer .yhead { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid #2a2e36; gap: 10px; }
+  #yamlDrawer .yhead b { font-size: 12.5px; }
+  #yamlDrawer .yhead span { color: #8b93a1; font-size: 11px; }
+  #yamlDrawer pre {
+    margin: 0; padding: 14px 18px; overflow: auto; flex: 1;
+    font-family: var(--mono); font-size: 12px; line-height: 1.55;
+  }
+  #yamlDrawer .hl { background: #2b3a55; border-radius: 3px; display: inline-block; width: 100%; }
+  #yamlDrawer .cbtn { margin-left: auto; background: none; border: 1px solid #2a2e36; color: #d6dbe3; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+
+  .mocknote {
+    position: fixed; left: 14px; bottom: 78px; z-index: 40; background: #111; color: #fff;
+    font-size: 11px; padding: 6px 10px; border-radius: 7px; opacity: .85;
+  }
+  a.btn { text-decoration: none; }
+  #narrowNote { display: none; }
+  @media (max-width: 920px) {
+    #narrowNote {
+      display: block; background: var(--warn-soft); color: var(--warn);
+      padding: 8px 14px; font-size: 12px; border-bottom: 1px solid var(--border);
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="narrowNote">This mockup mimics a desktop application — best viewed in a desktop browser window.</div>
+
+<header>
+  <div class="logo">F</div>
+  <div class="title">Workflow <small>build-release.yaml — MyFont</small></div>
+  <span class="pill" id="pinPill">preview pin: after step 1</span>
+  <div class="spacer"></div>
+  <button class="btn" id="yamlBtn">YAML ⌥</button>
+  <button class="btn">Recipes…</button>
+  <a class="btn" href="https://github.com/JeremieHornus/FontraPhilosophy/blob/main/workflow/ux.md" title="The UX vision document this mockup illustrates">About ↗</a>
+</header>
+
+<main>
+  <!-- ============ palette ============ -->
+  <aside id="palette">
+    <div class="search"><input id="pSearch" type="text" placeholder="Search actions…"></div>
+    <div id="paletteList"></div>
+  </aside>
+
+  <!-- ============ pipeline ============ -->
+  <section id="pipeline">
+    <h3>PIPELINE — drag actions from the left, click ◉ on a connector to preview the font at that point</h3>
+    <div class="stack" id="stack"></div>
+  </section>
+
+  <!-- ============ inspector + preview ============ -->
+  <aside id="right">
+    <div id="inspector"></div>
+    <div id="preview">
+      <h3>Preview at pin</h3>
+      <div id="pvToggleRow">
+        <span class="pill" id="pvWhere"></span>
+        <label class="check" style="display:flex;gap:5px;align-items:center;font-size:11px;color:var(--muted)">
+          <input type="checkbox" id="diffToggle"> diff vs. previous step
+        </label>
+      </div>
+      <div id="pvMeta"></div>
+      <div id="pvNote"></div>
+      <div id="sampleLine">Hamburgefonstiv 0123</div>
+      <div id="grid"></div>
+    </div>
+  </aside>
+</main>
+
+<!-- ============ run bar ============ -->
+<footer>
+  <button class="btn primary" id="runBtn">▶ Run</button>
+  <span class="outdir">output: ./build/</span>
+  <div class="prog">
+    <div class="pbar"><span class="fname">MyFont-Bold.ttf</span><div class="track"><div class="fill" id="p1"></div></div><span id="p1t">—</span></div>
+    <div class="pbar"><span class="fname">MyFont-VF.ttf</span><div class="track"><div class="fill" id="p2"></div></div><span id="p2t">—</span></div>
+  </div>
+  <div id="log"></div>
+</footer>
+
+<div class="mocknote">static mockup — no real engine behind this</div>
+
+<!-- ============ yaml drawer ============ -->
+<div id="yamlDrawer">
+  <div class="yhead"><b>build-release.yaml</b><span>two-way synced · git-friendly</span><button class="cbtn" id="yamlClose">close</button></div>
+  <pre id="yamlPre"></pre>
+</div>
+
+<script>
+/* ---------------- data ---------------- */
+const CHIP = { input: 'var(--input-chip)', filter: 'var(--filter-chip)', output: 'var(--output-chip)', fork: 'var(--fork-chip)' };
+
+const steps = [
+  { id:0, type:'input',  name:'fontra-read', sum:'source: Project.fontra', indent:0,
+    desc:'Open a font and merge it into the stream.',
+    fields:[ {l:'source', t:'text', v:'Project.fontra'} ] },
+  { id:1, type:'filter', name:'subset-by-development-status', sum:'statuses: [4 — finished]', indent:0,
+    desc:'Keep glyphs whose development status matches.',
+    fields:[ {l:'statuses', t:'tags', v:['0 in progress','1 checking','2 review','3 ok','4 finished'], on:[4]},
+             {l:'sourceSelectBehavior', t:'select', v:'default', o:['default','any','all']} ] },
+  { id:2, type:'filter', name:'check-interpolation', sum:'fixWithFallback: true', indent:0, warn:3,
+    desc:'Verify every glyph interpolates across its sources.',
+    fields:[ {l:'fixWithFallback', t:'check', v:true} ],
+    warnList:['ampersand — incompatible contour count (src 2/3)','gbreve — anchor mismatch','uni0259 — off-curve mismatch'] },
+  { id:3, type:'filter', name:'decompose-composites', sum:'onlyVariableComposites: false', indent:0,
+    desc:'Flatten components into outlines, preserving variation.',
+    fields:[ {l:'onlyVariableComposites', t:'check', v:false} ] },
+  { id:4, type:'fork',   name:'fork', sum:'branch — main stream unaffected', indent:0,
+    desc:'Branch the stream; nested steps don’t affect the main pipeline.', fields:[] },
+  { id:5, type:'filter', name:'instantiate', sum:'Weight: 700', indent:1,
+    desc:'Pin axes to fixed values — extract a static instance. Kerning is re-interpolated.',
+    fields:[ {l:'Weight', t:'range', v:700, min:100, max:900},
+             {l:'Width — not pinned', t:'range', v:100, min:75, max:150, off:true} ] },
+  { id:6, type:'output', name:'compile-fontmake', sum:'destination: MyFont-Bold.ttf', indent:1,
+    desc:'Compile a binary via fontmake (plugin: fontra-compile).',
+    fields:[ {l:'destination', t:'text', v:'MyFont-Bold.ttf'}, {l:'addMinimalGaspTable', t:'check', v:true} ] },
+  { id:7, type:'output', name:'compile-fontmake', sum:'destination: MyFont-VF.ttf', indent:0,
+    desc:'Compile the full variable font via fontmake.',
+    fields:[ {l:'destination', t:'text', v:'MyFont-VF.ttf'}, {l:'addMinimalGaspTable', t:'check', v:true} ] },
+];
+
+/* preview state per pin (pin i sits AFTER steps[i]) */
+const GLYPHS = 'ABCDEFGHIJKMNOPRSTUWabcdefghijkmnoprstuw0123456789&?!'.split('');
+const pins = {
+  0: { g:1242, ax:2, src:5, w:400, n:'Full project — everything Fontra read from Project.fontra.', cells:40, status:true },
+  1: { g:983,  ax:2, src:5, w:400, n:'Only “finished” glyphs kept; kerning, features and components subset accordingly.', cells:28 },
+  2: { g:983,  ax:2, src:5, w:400, n:'3 glyphs failed interpolation → replaced by default-source fallback (⚠).', cells:28 },
+  3: { g:983,  ax:2, src:5, w:400, n:'Components decomposed to outlines across all 5 sources.', cells:28 },
+  5: { g:983,  ax:1, src:2, w:700, n:'Branch: static Bold instance — Weight axis removed, kerning re-interpolated at 700.', cells:28 },
+  7: { g:983,  ax:2, src:5, w:400, n:'Main stream end point — unchanged by the fork or the outputs.', cells:28 },
+};
+
+const palette = [
+  ['Sources', [['fontra-read','input','core']]],
+  ['Designspace', [['instantiate','filter','core'],['trim-axes','filter','core'],['subset-axes','filter','core'],['rename-axes','filter','core'],['move-default-location','filter','core']]],
+  ['Glyphs & outlines', [['decompose-composites','filter','core'],['remove-overlaps','filter','core'],['convert-to-quadratics','filter','core'],['round-coordinates','filter','core'],['scale','filter','core'],['propagate-anchors','filter','core']]],
+  ['Subsetting', [['subset-glyphs','filter','core'],['drop-unreachable-glyphs','filter','core'],['subset-by-development-status','filter','core']]],
+  ['Features & kerning', [['generate-kern-feature','filter','core'],['add-features','filter','core'],['generate-palt-vpal-feature','filter','core']]],
+  ['QA', [['check-interpolation','filter','core']]],
+  ['Destinations', [['fontra-write','output','core'],['compile-fontmake','output','plugin'],['compile-fontc','output','plugin'],['compile-varc','output','plugin']]],
+];
+
+let selected = 1;
+let activePin = 1;
+
+/* ---------------- palette ---------------- */
+function renderPalette(q='') {
+  const el = document.getElementById('paletteList'); el.innerHTML = '';
+  palette.forEach(([cat, items]) => {
+    const hits = items.filter(([n]) => n.includes(q));
+    if (!hits.length) return;
+    const c = document.createElement('div'); c.className = 'pcat'; c.textContent = cat; el.appendChild(c);
+    hits.forEach(([n, t, from]) => {
+      const it = document.createElement('div'); it.className = 'pitem'; it.draggable = true;
+      it.innerHTML = `<span class="dot" style="background:${CHIP[t]}"></span><code>${n}</code>` +
+                     (from === 'plugin' ? '<span class="from">plugin</span>' : '');
+      it.title = 'Drag into the pipeline (mockup)';
+      el.appendChild(it);
+    });
+  });
+}
+document.getElementById('pSearch').addEventListener('input', e => renderPalette(e.target.value.trim()));
+
+/* ---------------- pipeline stack ---------------- */
+function connector(afterId, indent) {
+  const c = document.createElement('div');
+  c.className = 'connector' + (indent ? ' indent1' : '');
+  const hasPin = pins[afterId] !== undefined;
+  c.innerHTML = `<div class="line"></div>` +
+    (hasPin ? `<div class="pin ${activePin===afterId?'active':''}" data-pin="${afterId}" title="Preview the font at this point"></div>
+               <span class="pinlabel">preview here</span>` : '') +
+    `<button class="addbtn" title="Insert step (mockup)">+</button>`;
+  return c;
+}
+
+function renderStack() {
+  const el = document.getElementById('stack'); el.innerHTML = '';
+  steps.forEach((s) => {
+    const d = document.createElement('div');
+    d.className = 'step' + (s.indent ? ' indent1' : '') + (selected === s.id ? ' selected' : '');
+    d.dataset.id = s.id;
+    d.innerHTML = `<span class="chip" style="background:${CHIP[s.type]}">${s.type}</span>
+      <div class="body"><div class="aname">${s.name}</div><div class="asum">${s.sum}</div></div>` +
+      (s.warn ? `<span class="badge warn">⚠ ${s.warn}</span>` : `<span class="badge ok">✓</span>`);
+    d.addEventListener('click', () => { selected = s.id; renderStack(); renderInspector(); syncYaml(); });
+    el.appendChild(d);
+    el.appendChild(connector(s.id, s.indent));
+  });
+  el.querySelectorAll('.pin').forEach(p => p.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activePin = +p.dataset.pin;
+    renderStack(); renderPreview();
+  }));
+}
+
+/* ---------------- inspector ---------------- */
+function renderInspector() {
+  const s = steps.find(x => x.id === selected);
+  const el = document.getElementById('inspector');
+  let h = `<h3>Inspector</h3><div class="ititle">${s.name}</div><div class="idesc">${s.desc}</div>`;
+  s.fields.forEach(f => {
+    h += `<div class="field"><label>${f.l}</label>`;
+    if (f.t === 'text') h += `<input type="text" value="${f.v}">`;
+    if (f.t === 'select') h += `<select>${f.o.map(o => `<option ${o===f.v?'selected':''}>${o}</option>`).join('')}</select>`;
+    if (f.t === 'check') h += `<div class="check"><input type="checkbox" ${f.v?'checked':''}> <span>${f.v}</span></div>`;
+    if (f.t === 'range') h += `<div class="range"><input type="range" min="${f.min}" max="${f.max}" value="${f.v}" ${f.off?'disabled':''}><span class="rv">${f.off?'—':f.v}</span></div>`;
+    if (f.t === 'tags') h += `<div class="tagrow">${f.v.map((t,i)=>`<span class="tag ${f.on.includes(i)?'on':''}">${t}</span>`).join('')}</div>`;
+    h += `</div>`;
+  });
+  if (s.warnList) {
+    h += `<div class="warnbox"><b>⚠ ${s.warnList.length} glyphs flagged</b> — click to open in editor<br>` +
+         s.warnList.map(w => `<code>· ${w}</code>`).join('<br>') + `</div>`;
+  }
+  if (s.type === 'fork') h += `<div class="idesc">No arguments — fork only carries nested steps.</div>`;
+  el.innerHTML = h;
+
+  /* live-wire the instantiate slider to the preview, for the demo feel */
+  if (s.id === 5) {
+    const r = el.querySelector('input[type=range]:not([disabled])');
+    const rv = r.nextElementSibling;
+    r.addEventListener('input', () => {
+      rv.textContent = r.value;
+      s.sum = `Weight: ${r.value}`;
+      pins[5].w = +r.value;
+      pins[5].n = `Branch: static instance at Weight ${r.value} — axis removed, kerning re-interpolated.`;
+      if (activePin === 5) renderPreview();
+      renderStack(); syncYaml();
+    });
+  }
+}
+
+/* ---------------- preview ---------------- */
+function renderPreview() {
+  const p = pins[activePin];
+  const stepName = steps.find(s => s.id === activePin).name;
+  document.getElementById('pinPill').textContent = `preview pin: after “${stepName}”`;
+  document.getElementById('pvWhere').textContent = `after “${stepName}”`;
+  document.getElementById('pvMeta').innerHTML =
+    `<div class="m"><b>${p.g.toLocaleString()}</b><span>glyphs</span></div>
+     <div class="m"><b>${p.ax}</b><span>axes</span></div>
+     <div class="m"><b>${p.src}</b><span>sources</span></div>
+     <div class="m"><b>${p.w}</b><span>wght @ pin</span></div>`;
+  document.getElementById('pvNote').textContent = p.n;
+  const sample = document.getElementById('sampleLine');
+  sample.style.fontWeight = p.w >= 600 ? 700 : 400;
+
+  const diff = document.getElementById('diffToggle').checked;
+  const grid = document.getElementById('grid'); grid.innerHTML = '';
+  GLYPHS.slice(0, p.cells).forEach((ch, i) => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.style.fontWeight = p.w >= 600 ? 700 : 400;
+    if (p.status) c.innerHTML = `${ch}<span class="st" style="background:${i % 4 === 0 ? '#f59e0b' : '#22c55e'}"></span>`;
+    else c.textContent = ch;
+    if (diff && activePin === 5 && i % 5 !== 4) c.classList.add('diffNew');  /* fake "changed" highlight */
+    if (diff && activePin === 1 && i % 6 === 0) c.classList.add('diffNew');
+    grid.appendChild(c);
+  });
+}
+document.getElementById('diffToggle').addEventListener('change', renderPreview);
+
+/* ---------------- yaml drawer ---------------- */
+function yamlText() {
+  const w = steps[5].sum.replace('Weight: ','');
+  const lines = [
+    ['# build-release.yaml — edited here or in the GUI, same file', -1],
+    ['steps:', -1],
+    ['  - input: fontra-read', 0],
+    ['    source: Project.fontra', 0],
+    ['  - filter: subset-by-development-status', 1],
+    ['    statuses: [4]', 1],
+    ['  - filter: check-interpolation', 2],
+    ['    fixWithFallback: true', 2],
+    ['  - filter: decompose-composites', 3],
+    ['  - fork:', 4],
+    ['    steps:', 4],
+    ['      - filter: instantiate', 5],
+    [`        location: { Weight: ${w} }`, 5],
+    ['      - output: compile-fontmake', 6],
+    ['        destination: MyFont-Bold.ttf', 6],
+    ['        addMinimalGaspTable: true', 6],
+    ['  - output: compile-fontmake', 7],
+    ['    destination: MyFont-VF.ttf', 7],
+    ['    addMinimalGaspTable: true', 7],
+  ];
+  return lines.map(([t, id]) =>
+    id === selected ? `<span class="hl">${t}</span>` : t.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  ).join('\n');
+}
+function syncYaml(){ document.getElementById('yamlPre').innerHTML = yamlText(); }
+document.getElementById('yamlBtn').addEventListener('click', () => { syncYaml(); document.getElementById('yamlDrawer').classList.toggle('open'); });
+document.getElementById('yamlClose').addEventListener('click', () => document.getElementById('yamlDrawer').classList.remove('open'));
+
+/* ---------------- fake run ---------------- */
+const logEl = document.getElementById('log');
+function log(t, err){ const d = document.createElement('div'); if (err) d.className='err'; d.textContent = t; logEl.prepend(d); }
+document.getElementById('runBtn').addEventListener('click', () => {
+  const btn = document.getElementById('runBtn'); btn.disabled = true; btn.textContent = '… running';
+  logEl.innerHTML = ''; log('validating config — ok (2 outputs, 6 actions)');
+  let a = 0, b = 0;
+  const t = setInterval(() => {
+    a = Math.min(100, a + 4 + Math.random()*5);
+    b = Math.min(100, b + 2.4 + Math.random()*3);
+    p1.style.width = a+'%'; p2.style.width = b+'%';
+    p1t.textContent = a<100 ? Math.round(a*9.83)+' / 983 glyphs' : 'done ✓';
+    p2t.textContent = b<100 ? Math.round(b*9.83)+' / 983 glyphs' : 'done ✓';
+    if (a > 30 && a < 36) log('⚠ check-interpolation: ampersand → fallback', true);
+    if (a >= 100 && b >= 100) {
+      clearInterval(t); log('build/MyFont-Bold.ttf written'); log('build/MyFont-VF.ttf written');
+      btn.disabled = false; btn.textContent = '▶ Run';
+    }
+  }, 90);
+});
+
+/* ---------------- init ---------------- */
+renderPalette(); renderStack(); renderInspector(); renderPreview(); syncYaml();
+</script>
+</body>
+</html>
