@@ -1,6 +1,6 @@
 # A Friendlier UX for Fontra Workflow
 
-*Companion to the [Workflow documentation](documentation.md) and [proposed extensions](extensions.md). Question: would Workflow need a UI? Short answer: yes — but layered, and Fontra is unusually well positioned to build it cheaply. A clickable mockup accompanies this document ([`ui-mockup.html`](ui-mockup.html) — open in a browser).*
+*Companion to the [Workflow documentation](workflow-documentation.md) and [proposed extensions](extensions.md). Question: would Workflow need a UI? Short answer: yes — but layered, and Fontra is unusually well positioned to build it cheaply. A clickable mockup accompanies this document ([`mockup.html`](../mockup.html) — open in a browser, or at https://fontra.github.io/fontra-workflow-ui/mockup.html).*
 
 ---
 
@@ -10,7 +10,7 @@ Workflow's *engine* is friendly (composable, safe, lazy). The *experience* aroun
 
 1. **Blank-page problem** — you start from an empty YAML file and a vocabulary you can't discover without reading source code.
 2. **Blind authoring** — arguments are typed against invisible schemas; you learn the argument names by being wrong.
-3. **Blind execution** — you see the result only at the end, in an output file; intermediate states are invisible (unless you know the [`yaml`-backend trick](documentation.md)).
+3. **Blind execution** — you see the result only at the end, in an output file; intermediate states are invisible (unless you know the [`yaml`-backend trick](workflow-documentation.md)).
 4. **Errors arrive late and deep** — at step setup or mid-pull, as tracebacks.
 5. **Audience mismatch** — the people who would benefit most (designers doing production) are exactly the people YAML excludes.
 
@@ -39,7 +39,7 @@ Not a separate app — a fourth view alongside editor / font overview / font inf
 
 ### 4.1 Left: action palette
 
-Searchable, grouped by category (the taxonomy from the [Workflow documentation](documentation.md)), each action with a one-line description and its arguments — all generated from the introspection layer. Drag onto the pipeline, or click ＋ between steps. Plugin actions (fontra-compile etc.) appear automatically because registration is already dynamic.
+Searchable, grouped by category (the taxonomy from the [Workflow documentation](workflow-documentation.md)), each action with a one-line description and its arguments — all generated from the introspection layer. Drag onto the pipeline, or click ＋ between steps. Plugin actions (fontra-compile etc.) appear automatically because registration is already dynamic.
 
 ### 4.2 Center: the pipeline as a vertical step stack
 
