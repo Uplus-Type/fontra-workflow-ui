@@ -10,7 +10,9 @@ license = {text = "GNU General Public License v3"}
 requires-python = ">=3.11"
 # Fontra is installed from source (https://github.com/fontra/fontra). The
 # floor is the Fontra release this package is tested with; a deployment that
-# needs an exact version pins Fontra itself.
+# needs an exact version pins Fontra itself. The unrelated "fontra" package
+# on PyPI (0.x versions) can never satisfy it, so pip stops with an error
+# instead of installing it when Fontra is missing.
 dependencies = [
     "fontra>=2026.10.2",
     "pyyaml>=6.0.1",
