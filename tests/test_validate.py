@@ -330,3 +330,213 @@ steps:
     assert [e.path for e in check(text, catalog, policy=POLICY).errors] == [
         "steps[0].steps[0]"
     ]
+
+
+# --- header blocks: inputs, outputs, parameters, assets ---------------------------
+
+HEADED = """
+shareable: true
+inputs:
+  latin: {description: The Latin font}
+  cjk:
+outputs: [result]
+parameters:
+  factor: {default: 1.0}
+assets:
+  features: features/extra.fea
+  glyphs: {path: lists/keep.txt}
+steps:
+- input: fontra-read
+  source: "{latin}"
+- filter: subset-glyphs
+  glyphNamesFile: "{glyphs}"
+- filter: add-features
+  featureFile: "{features}"
+- filter: scale
+  scaleFactor: "{factor}"
+- output: fontra-write
+  destination: "{result}"
+"""
+
+
+def test_header_blocks_declare_slots(catalog):
+    result = check(HEADED, catalog)
+    assert messages(result) == []
+    assert result.slots == {
+        "latin": "inputs",
+        "cjk": "inputs",
+        "result": "outputs",
+        "factor": "parameters",
+        "features": "assets",
+        "glyphs": "assets",
+    }
+    assert result.shareable
+    assert result.variables == {"latin", "glyphs", "features", "factor", "result"}
+
+
+def test_split_recipe_hands_only_the_engine_part_on():
+    from fontra_workflow_ui.validate import engineConfig, splitRecipe
+
+    config = yaml.safe_load(HEADED)
+    header, engine = splitRecipe(config)
+    assert set(header) == {"shareable", "inputs", "outputs", "parameters", "assets"}
+    assert list(engine) == ["steps"]
+    assert engineConfig(config) == engine
+
+
+def test_the_engine_runs_a_recipe_without_its_header(tmp_path, catalog):
+    import asyncio
+
+    from fontra.workflow.workflow import Workflow
+
+    from fontra_workflow_ui.validate import engineConfig
+
+    config = yaml.safe_load("""
+inputs: {font: }
+steps:
+- filter: drop-kerning
+""")
+    assert check(yaml.safe_dump(config), catalog).ok
+
+    async def run():
+        async with Workflow(
+            config=engineConfig(config), parentDir=tmp_path
+        ).endPoints() as endPoints:
+            return await endPoints.endPoint.getGlyphMap()
+
+    assert asyncio.run(run()) == {}
+
+
+def test_undeclared_placeholders_are_refused_when_there_is_a_header(catalog):
+    text = """
+parameters: [factor]
+steps:
+- filter: scale
+  scaleFactor: "{factr}"
+- output: fontra-write
+  destination: "{family}-{factor}.fontra"
+"""
+    assert messages(check(text, catalog)) == [
+        "steps[0] (filter: scale), argument 'scaleFactor': placeholder {factr} "
+        "is not declared in inputs, outputs, parameters, assets",
+        "steps[1] (output: fontra-write), argument 'destination': placeholder "
+        "{family} is not declared in inputs, outputs, parameters, assets",
+    ]
+
+
+def test_placeholders_are_flat_names(catalog):
+    text = """
+parameters: [font]
+steps:
+- filter: set-font-info
+  fontInfo: {familyName: "{font.__class__}", styleName: "a { b"}
+"""
+    assert messages(check(text, catalog)) == [
+        "steps[0] (filter: set-font-info), argument 'fontInfo': placeholder "
+        "{font.__class__}: placeholders are flat names (letters, digits, '_' "
+        "and '-')",
+        "steps[0] (filter: set-font-info), argument 'fontInfo': unbalanced "
+        "braces in 'a { b' (write {{ and }} for literal braces)",
+    ]
+
+
+def test_header_mistakes(catalog):
+    text = """
+inputs: 3
+parameters: [a, a b]
+outputs: [b]
+assets: {b: x.fea, abs: /etc/passwd}
+steps: []
+"""
+    assert messages(check(text, catalog)) == [
+        "inputs: expected a mapping of slot names, or a list of names",
+        "parameters.a b: a slot name is letters, digits, '_' and '-'",
+        "assets.b: slot 'b' is already declared in outputs",
+        "assets.abs: assets are paths relative to the recipe, got '/etc/passwd'",
+    ]
+
+
+def test_without_a_header_placeholders_stay_free(catalog):
+    assert check("steps: [{filter: scale, scaleFactor: '{f}'}]", catalog).ok
+
+
+HIVE_LIKE = RecipePolicy(
+    deniedActions=frozenset({"fontra-read", "fontra-write"}),
+    rejectUnsafePaths=True,
+    requireDeclaredPlaceholders=True,
+    shareableForbiddenArguments=frozenset({"source"}),
+)
+
+
+def test_policy_requires_declared_placeholders_even_without_header(catalog):
+    text = "steps: [{filter: scale, scaleFactor: '{f}'}]"
+    assert messages(check(text, catalog, policy=HIVE_LIKE)) == [
+        "steps[0] (filter: scale), argument 'scaleFactor': placeholder {f} is "
+        "not declared in inputs, outputs, parameters, assets"
+    ]
+
+
+def test_policy_refuses_absolute_and_parent_paths(catalog):
+    text = """
+assets:
+  up: ../secret.fea
+  ok: features/ok.fea
+steps:
+- filter: add-features
+  featureFile: /etc/features.fea
+- filter: subset-glyphs
+  glyphNamesFile: lists/../../x.txt
+- filter: add-features
+  featureFile: features/ok.fea
+- filter: set-font-info
+  fontInfo: {copyright: "~/notes"}
+"""
+    assert check(text, catalog).ok  # fine locally
+    assert messages(check(text, catalog, policy=HIVE_LIKE)) == [
+        "assets.up: '..' is not allowed here: '../secret.fea'",
+        "steps[0] (filter: add-features), argument 'featureFile': absolute "
+        "paths and '..' are not allowed here: '/etc/features.fea'",
+        "steps[1] (filter: subset-glyphs), argument 'glyphNamesFile': absolute "
+        "paths and '..' are not allowed here: 'lists/../../x.txt'",
+        "steps[3] (filter: set-font-info), argument 'fontInfo': absolute paths "
+        "and '..' are not allowed here: '~/notes'",
+    ]
+
+
+def test_unsafe_paths_through_substitutions(catalog):
+    text = """
+assets: [fea]
+steps:
+- filter: add-features
+  featureFile: "{fea}"
+"""
+    assert check(text, catalog, policy=HIVE_LIKE).ok
+    result = check(text, catalog, policy=HIVE_LIKE, substitutions={"fea": "/etc/x.fea"})
+    assert messages(result) == [
+        "steps[0] (filter: add-features), argument 'featureFile': absolute "
+        "paths and '..' are not allowed here: '/etc/x.fea'"
+    ]
+
+
+def test_shareable_recipes_cannot_name_literals(catalog):
+    policy = RecipePolicy(shareableForbiddenArguments=frozenset({"featureFile"}))
+    text = """
+shareable: true
+inputs:
+  fea: {featureFile: shared.fea}
+  other: {featureFile: "{fea}"}
+steps:
+- filter: add-features
+  featureFile: features.fea
+- filter: add-features
+  featureFile: "{fea}"
+"""
+    assert messages(check(text, catalog, policy=policy)) == [
+        "inputs.fea: a shareable recipe cannot name a featureFile literally: "
+        "use a placeholder and declare it in inputs",
+        "steps[0] (filter: add-features), argument 'featureFile': a shareable "
+        "recipe cannot name a featureFile literally: use a placeholder and "
+        "declare it in inputs",
+    ]
+    notShared = text.replace("shareable: true", "shareable: false")
+    assert check(notShared, catalog, policy=policy).ok

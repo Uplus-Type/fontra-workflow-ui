@@ -47,9 +47,18 @@ for error in check.errors:
 print(check.variables)  # the {substitutions} the recipe uses
 ```
 
-A `RecipePolicy` lets a runner refuse actions or arguments that name files
-or folders (`"format": "path"` in the schema), for recipes run on a shared
-server.
+A recipe may start with header blocks, which the engine does not read:
+`inputs:`, `outputs:`, `parameters:` and `assets:` declare named *slots*
+(assets are paths relative to the recipe), and `shareable: true` marks a
+recipe meant to be shared. Steps cite slots with flat placeholders,
+`{name}`; in a recipe with a header, a placeholder that names no slot is an
+error. `splitRecipe()` / `engineConfig()` give what to hand to
+`Workflow(config=...)`.
+
+A `RecipePolicy` lets a runner on a shared server refuse more: given
+actions, arguments that name files or folders (`"format": "path"` in the
+schema), absolute paths and `..`, undeclared placeholders even without a
+header, and literal values of given arguments in a shareable recipe.
 
 Tests: `pytest` (they need Fontra importable; fontra-compile is optional).
 
