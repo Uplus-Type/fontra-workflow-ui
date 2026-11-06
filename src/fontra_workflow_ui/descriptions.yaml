@@ -1,0 +1,273 @@
+# Descriptions of fontra-workflow actions and their arguments, for actions
+# whose class has no docstring. A docstring, when an action gets one, wins.
+#
+# The names here are checked by the tests against the installed actions: an
+# action without a description, an argument without one, or an entry for an
+# action or argument that no longer exists makes a test fail. Update this file
+# when Fontra (or fontra-compile) adds, renames or removes something.
+#
+# Layout: <step type> -> <action name> -> {description, arguments: {name: text}}.
+# "package" names the package of an action that is not Fontra's own, so that
+# its entry is not reported as stale when that package is not installed.
+
+input:
+  fontra-read:
+    description: Read a font in any format Fontra can open; the format is chosen by the file extension.
+    arguments:
+      source: Path of the font to read (.fontra, .designspace, .ufo, .ttf, .otf, …), relative to the recipe.
+
+output:
+  fontra-write:
+    description: Write the font to any format Fontra can write; the format is chosen by the file extension.
+    arguments:
+      destination: Path of the font to write, relative to the output folder.
+
+  compile-fontmake:
+    package: fontra-compile
+    description: >-
+      Compile a binary font with fontmake, through a temporary designspace and UFOs.
+      A .ttf destination gives TrueType outlines (variable when the font has axes),
+      any other gives CFF or CFF2.
+    arguments:
+      destination: File name of the compiled font, in the output folder.
+      options: Extra fontmake command-line options, without the leading dashes (an option without a value is left empty).
+      setOverlapSimpleFlag: Set the OVERLAP_SIMPLE flag on glyph outlines.
+      addMinimalGaspTable: Add a minimal gasp table.
+      ufoTempDir: Folder where the temporary UFOs are kept, for inspection; a temporary folder by default.
+
+  compile-fontc:
+    package: fontra-compile
+    description: Compile a binary font with fontc, Google's Rust compiler, through the same temporary designspace and UFOs as compile-fontmake.
+    arguments:
+      destination: File name of the compiled font, in the output folder.
+      options: Extra fontc command-line options, without the leading dashes (an option without a value is left empty).
+      setOverlapSimpleFlag: Set the OVERLAP_SIMPLE flag on glyph outlines.
+      addMinimalGaspTable: Add a minimal gasp table.
+      ufoTempDir: Folder where the temporary UFOs are kept, for inspection; a temporary folder by default.
+
+  compile-varc:
+    package: fontra-compile
+    description: Compile with Fontra's own experimental compiler, keeping variable components as a VARC table; CFF2 outlines when the destination is .otf.
+    arguments:
+      destination: File name of the compiled font, in the output folder.
+      subroutinize: Subroutinize CFF2 outlines.
+      useExtendedGvar: Write the extended GVAR table instead of gvar (for fonts beyond 65,535 glyphs).
+
+filter:
+  # --- axes and sources ---
+
+  rename-axes:
+    description: Rename axes, or change their tag or label; source locations follow.
+    arguments:
+      axes: For each axis to change, by current name, the new values of name, tag and/or label.
+
+  adjust-axes:
+    description: Change the minimum, default and/or maximum of axes, optionally remapping source locations to the new ranges.
+    arguments:
+      axes: For each axis to change, by name, the new values (minValue, defaultValue, maxValue…).
+      remapSources: Move source locations along with the new axis ranges (piecewise linear).
+
+  trim-axes:
+    description: >-
+      Restrict axis ranges. Sources outside the new range are re-instantiated at
+      its edge, kerning is re-interpolated and conditional substitutions are
+      rewritten.
+    arguments:
+      axes: For each axis to trim, by name, the new minValue and/or maxValue.
+
+  subset-axes:
+    description: Keep some axes, or drop some; sources that are not at the default location of a dropped axis are removed.
+    arguments:
+      axisNames: Names of the axes to keep (all when empty).
+      dropAxisNames: Names of the axes to drop.
+
+  instantiate:
+    description: Fix axes at a location and remove them, giving a partial or full static instance; kerning is re-interpolated.
+    arguments:
+      location: Axis values to fix, by axis name, in user coordinates.
+      applyCrossAxisMappings: Apply cross-axis (avar 2) mappings to the location, and drop every axis.
+
+  move-default-location:
+    description: Move the default location of the designspace, creating sources where needed.
+    arguments:
+      newDefaultUserLocation: The new default value of each axis to move, by axis name, in user coordinates.
+
+  drop-axis-mappings:
+    description: Remove axis mappings (avar), converting locations accordingly.
+    arguments:
+      axes: Names of the axes whose mappings are removed (all axes when not given).
+
+  drop-cross-axis-mappings:
+    description: Remove cross-axis (avar 2) mappings.
+
+  set-location-base:
+    description: Make glyph source locations refer to the font sources they coincide with (locationBase).
+
+  clear-location-base:
+    description: Replace glyph source references to font sources (locationBase) with explicit locations.
+
+  drop-unused-sources-and-layers:
+    description: Remove inactive glyph sources and the layers no source uses.
+
+  drop-font-sources-and-kerning:
+    description: Remove the font sources and the kerning.
+
+  # --- glyphs and outlines ---
+
+  decompose-composites:
+    description: Decompose components into outlines, adding the glyph sources needed to keep the variations across the designspace.
+    arguments:
+      onlyVariableComposites: Only decompose components that use variable-component axes.
+
+  shallow-decompose-composites:
+    description: Decompose components one level deep, optionally only in some glyphs or only some components.
+    arguments:
+      glyphNames: Glyphs whose components are decomposed (all when empty).
+      componentGlyphNames: Components to decompose (all when empty).
+
+  trim-variable-glyphs:
+    description: Trim the axes of variable glyphs to the ranges the composites that use them actually need.
+    arguments:
+      moveDefaultBehavior: >-
+        When the default of a glyph axis may move: "none" (never), "empty" (only
+        for axes that are dropped, as a way to instantiate) or "any" (when the
+        needed range does not include the default).
+
+  remove-overlaps:
+    description: Remove overlaps in the outlines of every layer.
+
+  convert-to-quadratics:
+    description: Convert cubic curves to quadratic curves (cu2qu), keeping the sources compatible.
+    arguments:
+      maximumError: Maximum distance between the original and the converted curves, in font units (cu2qu's default when not given).
+      reverseDirection: Reverse the contour direction, as TrueType outlines expect.
+
+  round-coordinates:
+    description: Round coordinates to integers, everywhere or selectively.
+    arguments:
+      roundPathCoordinates: Round outline points.
+      roundComponentOrigins: Round component offsets.
+      roundGlyphMetrics: Round advance widths and heights.
+      roundAnchors: Round anchor positions.
+      roundLineMetrics: Round line metrics (ascender, x-height…).
+      roundKerning: Round kerning values.
+
+  scale:
+    description: Scale outlines, and optionally metrics and kerning; with font metrics, this changes the units per em.
+    arguments:
+      scaleFactor: The scale factor (2 doubles the size).
+      scaleFontMetrics: Also scale the line metrics and the units per em.
+      scaleKerning: Also scale the kerning.
+
+  drop-shapes:
+    description: Empty glyphs of some of their contents, for instance to make a metrics-only font.
+    arguments:
+      dropPath: Remove outlines.
+      dropComponents: Remove components.
+      dropAnchors: Remove anchors.
+      dropGuidelines: Remove guidelines.
+
+  propagate-anchors:
+    description: Copy anchors from components into the composites that use them, the way glyphsLib does (ligature anchors included).
+
+  drop-background-images:
+    description: Remove background images from every layer.
+
+  set-vertical-glyph-metrics:
+    description: Give glyphs that have none a vertical origin and a vertical advance.
+    arguments:
+      verticalOrigin: The vertical origin to set.
+      yAdvance: The vertical advance to set.
+
+  set-vertical-glyph-metrics-from-anchors:
+    description: Set vertical glyph metrics from top and bottom side bearing anchors.
+    arguments:
+      tsbAnchorName: Name of the anchor marking the top side bearing.
+      bsbAnchorName: Name of the anchor marking the bottom side bearing.
+
+  # --- subsetting ---
+
+  subset-glyphs:
+    description: >-
+      Keep, or drop, a given set of glyphs (lists and files are combined). Base
+      glyphs of kept composites are kept; kerning, groups and features are
+      subset.
+    arguments:
+      glyphNames: Glyphs to keep (all when empty).
+      glyphNamesFile: A text file of glyph names to keep, one per line.
+      dropGlyphNames: Glyphs to drop.
+      dropGlyphNamesFile: A text file of glyph names to drop, one per line.
+      layoutHandling: >-
+        What to do with OpenType features: "subset" them, use them to extend the
+        glyph set ("closure"), or "ignore" them.
+
+  drop-unreachable-glyphs:
+    description: Keep only encoded glyphs and the glyphs reachable from them through features and components.
+    arguments:
+      keepNotdef: Keep .notdef.
+      layoutHandling: >-
+        What to do with OpenType features: "subset" them, use them to extend the
+        glyph set ("closure"), or "ignore" them.
+
+  subset-by-development-status:
+    description: Keep the glyphs whose development status is one of the given ones.
+    arguments:
+      statuses: The development status values to keep (as numbered in the font's settings).
+      sourceSelectBehavior: >-
+        Which glyph sources must have the status: "default" (the default
+        source), "any" (at least one) or "all".
+      layoutHandling: >-
+        What to do with OpenType features: "subset" them, use them to extend the
+        glyph set ("closure"), or "ignore" them.
+
+  # --- features and kerning ---
+
+  add-features:
+    description: Merge an OpenType feature file into the font's features.
+    arguments:
+      featureFile: Path of the .fea file, relative to the recipe.
+
+  drop-features:
+    description: Remove all OpenType feature code.
+
+  generate-kern-feature:
+    description: Write the kerning as a variable OpenType kern feature.
+    arguments:
+      dropKern: Remove the kerning data once it is in the feature.
+
+  generate-vkrn-feature:
+    description: Write the vertical kerning as a variable OpenType vkrn feature.
+    arguments:
+      dropVkrn: Remove the vertical kerning data once it is in the feature.
+
+  generate-palt-vpal-feature:
+    description: Generate variable palt and vpal features (proportional alternates) from side-bearing anchors.
+    arguments:
+      languageSystems: Language systems of the features, as [script, language] pairs.
+
+  drop-kerning:
+    description: Remove the kerning.
+
+  # --- font data and checks ---
+
+  set-font-info:
+    description: Set font info fields (family name, version…); unknown names are reported.
+    arguments:
+      fontInfo: The fields to set, by name.
+
+  amend-cmap:
+    description: Add, change or remove code point assignments.
+    arguments:
+      cmap: Glyph name for each code point ("U+0041" or an integer); an empty value removes the code point.
+      cmapFile: A text file of "U+XXXX glyphname" lines (a code point alone removes it).
+
+  check-interpolation:
+    description: Check that every glyph interpolates; fail, or replace a broken glyph by its default source.
+    arguments:
+      fixWithFallback: Replace a glyph that does not interpolate by its default source instead of failing.
+
+  memory-cache:
+    description: Keep the glyphs read at this point in memory.
+
+  disk-cache:
+    description: Keep the glyphs read at this point in a temporary folder.
