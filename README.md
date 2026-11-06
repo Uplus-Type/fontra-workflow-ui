@@ -43,4 +43,8 @@ entry points. The Workflow view will be an editor plug-in talking to the
 
 ## License
 
-CC BY 4.0 for the documents and the mockup, as in the repo they came from.
+The code (the `fontra_workflow_ui` package and its tests) is under the
+[GNU General Public License v3](LICENSE), like Fontra. The documents in
+`docs/`, this README's background sections and the original mockup
+(`mockup.html`) stay under [CC BY 4.0](LICENSE-docs), as in the repo they came
+from.
