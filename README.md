@@ -13,7 +13,7 @@ written yet; the repo also holds the thinking and the clickable mockup.
 ## The package
 
 ```sh
-pip install -e path/to/fontra          # Fontra from source, 2026.10.2 or later
+pip install -e path/to/fontra          # Fontra from source (tested with 2026.10.2)
 pip install -e ".[dev]"                # this repo
 ```
 
