@@ -1,0 +1,215 @@
+From 0118636fc131bfcbb701e6ef671bd2533f3b6663 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=A9r=C3=A9mie=20Hornus?= <typecrossing@gmail.com>
+Date: Fri, 6 Nov 2026 06:08:23 +0100
+Subject: [PATCH] fontra-workflow list-actions: list the actions and their
+ arguments
+
+`fontra-workflow list-actions` prints every registered workflow action
+(Fontra's own and those of installed packages, via the
+fontra.workflow.actions entry points), with the arguments each accepts:
+name, annotated type, default, or "required". `--json` prints the same as
+JSON, for tools that build forms or check configurations.
+
+The arguments are read from the action dataclasses' fields, so the list
+follows any change to an action without further maintenance.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ src/fontra/workflow/command.py   | 104 ++++++++++++++++++++++++++++++-
+ test-py/test_workflow_command.py |  54 ++++++++++++++++
+ 2 files changed, 157 insertions(+), 1 deletion(-)
+ create mode 100644 test-py/test_workflow_command.py
+
+diff --git a/src/fontra/workflow/command.py b/src/fontra/workflow/command.py
+index 1f14e0aac..3d65fafa5 100644
+--- a/src/fontra/workflow/command.py
++++ b/src/fontra/workflow/command.py
+@@ -1,14 +1,17 @@
+ import argparse
+ import asyncio
++import dataclasses
+ import json
+ import logging
+ import pathlib
+ import sys
+ from contextlib import AsyncExitStack
++from enum import Enum
+ 
+ import yaml
+ 
+-from .workflow import Workflow
++from .actions import _actionRegistry
++from .workflow import Workflow, _loadActionsEntryPoints
+ 
+ levelNamesMapping = logging.getLevelNamesMapping()
+ 
+@@ -136,7 +139,106 @@ async def mainAsync() -> None:
+             await output.process(output_dir, continueOnError=args.continue_on_error)
+ 
+ 
++# Fields of action classes that the engine sets, not the configuration.
++_engineFields = {"input"}
++
++
++def getActionInfos() -> list[dict]:
++    """Describe every registered action (Fontra's own and those of installed
++    packages): its type, name, module, and the arguments it accepts, from
++    the fields of its dataclass."""
++    _loadActionsEntryPoints()
++    infos = []
++    for actionType in ["input", "filter", "output"]:
++        registry = _actionRegistry[actionType]
++        for actionName, actionClass in sorted(registry.items()):
++            infos.append(
++                dict(
++                    type=actionType,
++                    name=actionName,
++                    module=actionClass.__module__,
++                    arguments=_getActionArguments(actionClass),
++                )
++            )
++    return infos
++
++
++def _getActionArguments(actionClass) -> list[dict]:
++    if not dataclasses.is_dataclass(actionClass):
++        return []
++    arguments = []
++    for field in dataclasses.fields(actionClass):
++        if not field.init or field.name in _engineFields:
++            continue
++        argument = dict(name=field.name, type=_typeString(field.type))
++        if field.default is not dataclasses.MISSING:
++            argument["default"] = _jsonValue(field.default)
++        elif field.default_factory is not dataclasses.MISSING:
++            argument["default"] = _jsonValue(field.default_factory())
++        else:
++            argument["required"] = True
++        arguments.append(argument)
++    return arguments
++
++
++def _typeString(fieldType) -> str:
++    if isinstance(fieldType, str):
++        return fieldType
++    return getattr(fieldType, "__name__", None) or repr(fieldType)
++
++
++def _jsonValue(value):
++    if isinstance(value, Enum):
++        return _jsonValue(value.value)
++    if value is None or isinstance(value, (str, bool, int, float)):
++        return value
++    if isinstance(value, (set, frozenset)):
++        return sorted((_jsonValue(v) for v in value), key=repr)
++    if isinstance(value, (list, tuple)):
++        return [_jsonValue(v) for v in value]
++    if isinstance(value, dict):
++        return {str(k): _jsonValue(v) for k, v in value.items()}
++    return repr(value)
++
++
++def formatActionInfos(infos: list[dict]) -> str:
++    lines = []
++    currentType = None
++    for info in infos:
++        if info["type"] != currentType:
++            currentType = info["type"]
++            if lines:
++                lines.append("")
++            lines.append(f"{currentType} actions:")
++        lines.append(f"  {info['name']}")
++        for argument in info["arguments"]:
++            line = f"    {argument['name']}: {argument['type']}"
++            if argument.get("required"):
++                line += " (required)"
++            else:
++                line += f" = {json.dumps(argument['default'])}"
++            lines.append(line)
++    return "\n".join(lines) + "\n"
++
++
++def listActionsMain(arguments: list[str]) -> None:
++    parser = argparse.ArgumentParser(
++        prog="fontra-workflow list-actions",
++        description="List the available workflow actions and their arguments",
++    )
++    parser.add_argument("--json", action="store_true", help="Output the list as JSON")
++    args = parser.parse_args(arguments)
++    infos = getActionInfos()
++    if args.json:
++        print(json.dumps(infos, indent=2))
++    else:
++        print(formatActionInfos(infos), end="")
++
++
+ def main():
++    if sys.argv[1:2] == ["list-actions"] and not pathlib.Path("list-actions").exists():
++        listActionsMain(sys.argv[2:])
++        return
+     asyncio.run(mainAsync())
+ 
+ 
+diff --git a/test-py/test_workflow_command.py b/test-py/test_workflow_command.py
+new file mode 100644
+index 000000000..764415186
+--- /dev/null
++++ b/test-py/test_workflow_command.py
+@@ -0,0 +1,54 @@
++import json
++import subprocess
++import sys
++
++from fontra.workflow.command import formatActionInfos, getActionInfos
++
++
++def test_getActionInfos():
++    infos = getActionInfos()
++    byName = {(info["type"], info["name"]): info for info in infos}
++
++    assert ("input", "fontra-read") in byName
++    assert ("output", "fontra-write") in byName
++
++    scale = byName["filter", "scale"]
++    assert scale["module"] == "fontra.workflow.actions.glyph"
++    assert scale["arguments"] == [
++        {"name": "scaleFactor", "type": "float", "required": True},
++        {"name": "scaleFontMetrics", "type": "bool", "default": True},
++        {"name": "scaleKerning", "type": "bool", "default": True},
++    ]
++
++    # Fields the engine sets are not arguments
++    fontraWrite = byName["output", "fontra-write"]
++    assert [a["name"] for a in fontraWrite["arguments"]] == ["destination"]
++
++    # Defaults are plain JSON: a set default becomes a list, an enum its value
++    subset = byName["filter", "subset-glyphs"]
++    arguments = {a["name"]: a for a in subset["arguments"]}
++    assert arguments["glyphNames"]["default"] == []
++    assert arguments["layoutHandling"]["default"] == "subset"
++
++    json.dumps(infos)  # all of it is JSON
++
++
++def test_formatActionInfos():
++    text = formatActionInfos(getActionInfos())
++    assert text.startswith(
++        "input actions:\n  fontra-read\n    source: str (required)\n"
++    )
++    assert "\n  scale\n    scaleFactor: float (required)\n" in text
++    assert "    scaleKerning: bool = true\n" in text
++
++
++def test_list_actions_command():
++    result = subprocess.run(
++        [sys.executable, "-m", "fontra.workflow.command", "list-actions", "--json"],
++        capture_output=True,
++        encoding="utf-8",
++        check=True,
++    )
++    infos = json.loads(result.stdout)
++    assert {"type", "name", "module", "arguments"} == set(infos[0])
++    assert any(info["name"] == "subset-glyphs" for info in infos)
+-- 
+2.43.0
+
