@@ -38,7 +38,13 @@ import typing
 from dataclasses import dataclass, field
 from functools import cache
 from importlib import resources
-from importlib.metadata import entry_points, packages_distributions, version
+from importlib.metadata import (
+    PackageNotFoundError,
+    distribution,
+    entry_points,
+    packages_distributions,
+    version,
+)
 from typing import Any
 
 import yaml
@@ -475,7 +481,18 @@ def bundledDescriptions() -> dict[str, dict[str, dict]]:
 
 @cache
 def _distributionsByModule() -> dict[str, list[str]]:
-    return packages_distributions()
+    """Top-level module -> distribution names. ``packages_distributions()``
+    reads the installed files, which an editable install (``pip install -e``)
+    does not list; the action entry points name their distribution in any
+    case, so they fill the gaps."""
+    mapping = {k: list(v) for k, v in packages_distributions().items()}
+    for entryPoint in entry_points(group=ENTRY_POINT_GROUP):
+        dist = getattr(entryPoint, "dist", None)
+        if dist is None:
+            continue
+        topLevel = entryPoint.value.split(":")[0].split(".")[0]
+        mapping.setdefault(topLevel, [dist.metadata["Name"]])
+    return mapping
 
 
 def _packageOf(cls: type) -> str | None:
@@ -483,6 +500,13 @@ def _packageOf(cls: type) -> str | None:
     distributions = _distributionsByModule().get(topLevel)
     if distributions:
         return distributions[0]
+    # An editable install without entry points (Fontra itself): its
+    # distribution is usually named after the module.
+    for candidate in (topLevel.replace("_", "-"), topLevel):
+        try:
+            return distribution(candidate).metadata["Name"]
+        except PackageNotFoundError:
+            pass
     return topLevel
 
 

@@ -293,3 +293,25 @@ def test_a_type_can_give_its_own_schema():
     assert typeSchema(ProjectRef | None) == {
         "anyOf": [{"type": "string", "format": "some-project"}, {"type": "null"}]
     }
+
+
+def test_package_names_without_installed_file_lists(monkeypatch):
+    """An editable install (pip install -e) lists no modules among its
+    files: the distribution is found by entry point or by name, not
+    reported as the module's name."""
+    from importlib import metadata
+
+    monkeypatch.setattr(metadata, "packages_distributions", lambda: {})
+    monkeypatch.setattr(introspect, "packages_distributions", lambda: {})
+    introspect._distributionsByModule.cache_clear()
+    try:
+        info = describeAction("filter", "scale", actionRegistry()["filter"]["scale"])
+        assert info.package == "fontra"
+        for actionType in ACTION_TYPES:
+            for name, cls in actionRegistry()[actionType].items():
+                if cls.__module__.startswith("fontra_compile."):
+                    assert describeAction(actionType, name, cls).package == (
+                        "fontra-compile"
+                    )
+    finally:
+        introspect._distributionsByModule.cache_clear()
