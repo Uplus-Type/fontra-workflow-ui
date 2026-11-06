@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fontra-workflow-ui"
+description = "A Workflow view for the Fontra font editor: action catalog, recipe validation, and (later) a graphical editor for fontra-workflow recipes"
+readme = "README.md"
+license = {text = "GNU General Public License v3"}
+requires-python = ">=3.11"
+# Fontra is installed from source (https://github.com/fontra/fontra). The
+# floor is the Fontra release this package is tested with; a deployment that
+# needs an exact version pins Fontra itself.
+dependencies = [
+    "fontra>=2026.10.2",
+    "pyyaml>=6.0.1",
+]
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Source = "https://github.com/Uplus-Type/fontra-workflow-ui"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+fontra-workflow-ui = "fontra_workflow_ui.cli:main"
+
+# Declared now, filled when the view exists: the view's page and its static
+# files will live in fontra_workflow_ui/client.
+[project.entry-points."fontra.views"]
+workflow = "fontra_workflow_ui.client"
+
+[project.entry-points."fontra.webcontent"]
+workflow-ui = "fontra_workflow_ui.client"
+
+[tool.hatch.version]
+path = "src/fontra_workflow_ui/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fontra_workflow_ui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
