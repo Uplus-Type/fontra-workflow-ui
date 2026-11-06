@@ -17,6 +17,9 @@ Two extensions to JSON schema are used:
 * ``"format": "path"`` marks an argument that names a file or folder (a
   string argument called ``source``, ``destination`` or ending in ``File``,
   ``Dir`` or ``Path``). A hosted runner refuses or rewrites those.
+* A type may give its own schema with a ``__json_schema__`` dict (for
+  instance ``{"type": "string", "format": "hive-project"}``), so that an
+  argument naming something specific is told apart from any string.
 * ``"x-python-type"`` keeps the Python annotation an argument was derived
   from, when it could not be mapped to a JSON type (the schema is then ``{}``,
   anything goes).
@@ -24,6 +27,7 @@ Two extensions to JSON schema are used:
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import enum
 import inspect
@@ -312,6 +316,11 @@ def typeSchema(annotation) -> dict[str, Any]:
     them (YAML: a ``set[str]`` is a list, a ``tuple`` is a list)."""
     if annotation is Any or annotation is typing.Any:
         return {}
+    own = getattr(annotation, "__json_schema__", None)
+    if isinstance(own, dict):
+        # A type that says what it is (a project reference, say): tools can
+        # tell it from any value of its JSON type.
+        return copy.deepcopy(own)
     if annotation in _SIMPLE:
         return {"type": _SIMPLE[annotation]}
     if isinstance(annotation, type) and issubclass(annotation, enum.Enum):

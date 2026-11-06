@@ -74,7 +74,9 @@ class RecipePolicy:
     * ``requireDeclaredPlaceholders``: placeholders that name no slot, even
       in a recipe without a header;
     * ``shareableForbiddenArguments``: in a recipe marked shareable, these
-      arguments (and header entries) must be placeholders, not literals.
+      arguments (and header entries) must be placeholders, not literals;
+    * ``shareableForbiddenFormats``: the same for every argument whose schema
+      has one of these formats (``"hive-project"``, say), whatever its name.
     """
 
     deniedActions: frozenset[str] = frozenset()
@@ -82,6 +84,7 @@ class RecipePolicy:
     rejectUnsafePaths: bool = False
     requireDeclaredPlaceholders: bool = False
     shareableForbiddenArguments: frozenset[str] = frozenset()
+    shareableForbiddenFormats: frozenset[str] = frozenset()
     reason: str = ""
 
 
@@ -185,7 +188,7 @@ def validateRecipe(
     )
     _checkPlaceholders(steps, "steps", check, strict=strict)
     if check.shareable and policy is not None:
-        _checkShareable(steps, "steps", policy, check)
+        _checkShareable(steps, "steps", catalog, policy, check)
 
     if substitutions is not None:
         from fontra.workflow.workflow import substituteStrings
@@ -420,11 +423,21 @@ def _checkPlaceholders(steps, path, check: RecipeCheck, *, strict: bool) -> None
                         )
 
 
-def _checkShareable(steps, path, policy: RecipePolicy, check: RecipeCheck) -> None:
+def _checkShareable(
+    steps, path, catalog: Catalog, policy: RecipePolicy, check: RecipeCheck
+) -> None:
     for stepPath, stepType, action, step in _walkSteps(steps, path):
+        forbidden = set(policy.shareableForbiddenArguments)
+        info = catalog.get(stepType, action) if stepType and action else None
+        if info is not None and policy.shareableForbiddenFormats:
+            forbidden |= {
+                name
+                for name, schema in info.properties.items()
+                if schema.get("format") in policy.shareableForbiddenFormats
+            }
         for key, value in _literalArguments(
             {k: v for k, v in step.items() if k not in ("steps", stepType)},
-            policy.shareableForbiddenArguments,
+            frozenset(forbidden),
         ):
             check.errors.append(
                 RecipeError(

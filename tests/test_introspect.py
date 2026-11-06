@@ -280,3 +280,16 @@ def test_descriptions_file_is_the_fallback():
 def test_parse_docstring_without_arguments():
     assert parseDocstring("One line.") == ("One line.", {})
     assert parseDocstring(None) == (None, {})
+
+
+def test_a_type_can_give_its_own_schema():
+    class ProjectRef(str):
+        __json_schema__ = {"type": "string", "format": "some-project"}
+
+    schema = typeSchema(ProjectRef)
+    assert schema == {"type": "string", "format": "some-project"}
+    schema["format"] = "changed"  # a copy, not the class's own dict
+    assert ProjectRef.__json_schema__["format"] == "some-project"
+    assert typeSchema(ProjectRef | None) == {
+        "anyOf": [{"type": "string", "format": "some-project"}, {"type": "null"}]
+    }

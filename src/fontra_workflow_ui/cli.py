@@ -57,8 +57,8 @@ def _argumentLine(name: str, schema: dict, info) -> str:
         parts.append("required")
     elif "default" in schema:
         parts.append(f"default {json.dumps(schema['default'], ensure_ascii=False)}")
-    if schema.get("format") == "path":
-        parts.append("path")
+    if schema.get("format"):
+        parts.append(schema["format"])  # "path", "hive-project"…
     return ", ".join(parts)
 
 

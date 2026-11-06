@@ -540,3 +540,22 @@ steps:
     ]
     notShared = text.replace("shareable: true", "shareable: false")
     assert check(notShared, catalog, policy=policy).ok
+
+
+def test_shareable_recipes_cannot_name_literals_of_a_format(catalog):
+    # Every path argument of the catalog has "format": "path": a policy can
+    # forbid literals by format, whatever the argument is called.
+    policy = RecipePolicy(shareableForbiddenFormats=frozenset({"path"}))
+    text = """
+shareable: true
+assets: [names]
+steps:
+- filter: subset-glyphs
+  glyphNamesFile: keep.txt
+  dropGlyphNamesFile: "{names}"
+"""
+    assert messages(check(text, catalog, policy=policy)) == [
+        "steps[0] (filter: subset-glyphs), argument 'glyphNamesFile': a "
+        "shareable recipe cannot name a glyphNamesFile literally: use a "
+        "placeholder and declare it in inputs"
+    ]
