@@ -5,8 +5,53 @@ as a Fontra extension (plug-in): a step stack, schema-generated inspectors
 for each action, and a per-step font preview, round-tripping to the YAML
 that `fontra-workflow` already runs.
 
-**Status: concept.** Nothing runs yet. This repo holds the thinking, the
-clickable mockup, and will hold the extension's code.
+**Status: early.** The Python package has its first piece: the **action
+catalog** (a JSON schema for every `fontra-workflow` action, generated from
+the installed actions) and **recipe validation**. The view itself is not
+written yet; the repo also holds the thinking and the clickable mockup.
+
+## The package
+
+```sh
+pip install -e path/to/fontra          # Fontra from source, 2026.10.2 or later
+pip install -e ".[dev]"                # this repo
+```
+
+```sh
+fontra-workflow-ui list-actions               # every installed action, with its arguments
+fontra-workflow-ui list-actions --json        # the catalog, with a JSON schema per action
+fontra-workflow-ui validate recipe.yaml       # check a recipe without running it
+```
+
+Nothing in the catalog is written by hand per action. It is read from
+Fontra's action registry, with the actions of every installed package
+(`fontra.workflow.actions` entry points, so fontra-compile's when it is
+installed), and each action's arguments come from the fields of its
+dataclass: type, default, required or not, enumerations. When Fontra adds an
+action or renames an argument, the catalog follows. Descriptions come from an
+action's docstring, or else from
+[`descriptions.yaml`](src/fontra_workflow_ui/descriptions.yaml); a test fails
+when an installed action or argument has no description, or when the file
+describes one that no longer exists.
+
+From Python:
+
+```python
+import yaml
+from fontra_workflow_ui.introspect import buildCatalog
+from fontra_workflow_ui.validate import RecipePolicy, validateRecipe
+
+check = validateRecipe(yaml.safe_load(text), catalog=buildCatalog())
+for error in check.errors:
+    print(error)  # steps[2] (filter: scale), argument 'scaleFactor': expected a number, got 'abc'
+print(check.variables)  # the {substitutions} the recipe uses
+```
+
+A `RecipePolicy` lets a runner refuse actions or arguments that name files
+or folders (`"format": "path"` in the schema), for recipes run on a shared
+server.
+
+Tests: `pytest` (they need Fontra importable; fontra-compile is optional).
 
 ## Start here
 
